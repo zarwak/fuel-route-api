@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fuel Route Planner</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <style>
+    :root { --bg:#f5f7fa; --card:#fff; --text:#1c2733; --muted:#64748b; --line:#dbe2ea; --accent:#2563eb; --good:#16a34a; --bad:#dc2626; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--text); background:var(--bg); }
+    header { padding:14px 20px; background:var(--card); border-bottom:1px solid var(--line); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    h1 { font-size:18px; margin:0 12px 0 0; }
+    form { display:flex; gap:8px; flex-wrap:wrap; flex:1; min-width:280px; }
+    input { flex:1; min-width:150px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; color:var(--text); }
+    button { padding:9px 18px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:wait; }
+    main { display:grid; grid-template-columns: 340px 1fr; height: calc(100vh - 66px); }
+    aside { overflow:auto; padding:16px; background:var(--bg); border-right:1px solid var(--line); }
+    #map { height:100%; min-height:420px; }
+    .cards { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+    .card b { display:block; font-size:20px; }
+    .card span { color:var(--muted); font-size:12px; }
+    .card.total b { color:var(--good); }
+    h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:16px 0 8px; }
+    .stop { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+    .stop:hover { border-color:var(--accent); }
+    .stop .top { display:flex; justify-content:space-between; gap:8px; font-weight:600; }
+    .stop .sub { color:var(--muted); font-size:13px; }
+    .num { display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; align-items:center; justify-content:center; margin-right:8px; }
+    .msg { padding:12px; border-radius:10px; background:var(--card); border:1px solid var(--line); color:var(--muted); }
+    .msg.error { border-color:var(--bad); color:var(--bad); }
+    .msg.warn { border-color:#d97706; color:#d97706; margin-bottom:12px; }
+    .note { font-size:12px; color:var(--muted); margin-top:14px; }
+    .pin { width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; font:600 12px system-ui; }
+    @media (max-width: 760px) { main { grid-template-columns:1fr; height:auto; } #map { height:60vh; } aside { border-right:0; } }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0f1720; --card:#17212c; --text:#e6edf3; --muted:#93a1b0; --line:#2a3745; }
+      input { background:#0f1720; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Fuel Route Planner</h1>
+    <form id="form">
+      <input id="start" value="Chicago, IL" placeholder="Start (city, address or lat,lon)" required>
+      <input id="finish" value="Dallas, TX" placeholder="Finish" required>
+      <button id="go" type="submit">Plan route</button>
+    </form>
+  </header>
+  <main>
+    <aside id="panel"><div class="msg">Enter a start and finish in the USA, then press <b>Plan route</b>.</div></aside>
+    <div id="map"></div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([39.5, -98.35], 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    const layer = L.layerGroup().addTo(map);
+    const panel = document.getElementById('panel');
+    const go = document.getElementById('go');
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const money = n => '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    document.getElementById('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      go.disabled = true; go.textContent = 'Planning…';
+      panel.innerHTML = '<div class="msg">Finding the route and the cheapest fuel stops…</div>';
+      try {
+        const r = await fetch('/api/route', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({start: start.value, finish: finish.value})
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || ('Request failed (' + r.status + ')'));
+        draw(d);
+      } catch (err) {
+        layer.clearLayers();
+        panel.innerHTML = '<div class="msg error">' + esc(err.message) + '</div>';
+      } finally {
+        go.disabled = false; go.textContent = 'Plan route';
+      }
+    });
+
+    function draw(d) {
+      layer.clearLayers();
+      const markers = [];
+      let stopNo = 0;
+      const geo = L.geoJSON(d.map, {
+        style: f => f.properties.kind === 'route' ? {color:'#2563eb', weight:5, opacity:.85} : {},
+        pointToLayer: (f, ll) => {
+          const k = f.properties.kind;
+          if (k === 'fuel_stop') {
+            const n = ++stopNo;
+            const m = L.marker(ll, {icon: L.divIcon({className:'', html:'<div class="pin">' + n + '</div>', iconSize:[26,26], iconAnchor:[13,13]})});
+            const p = f.properties;
+            m.bindPopup('<b>' + esc(p.name) + '</b><br>' + esc(p.city) + ', ' + esc(p.state) +
+              '<br>' + esc(p.address) + '<hr style="margin:6px 0">' +
+              '<b>' + p.price_per_gallon.toFixed(3) + ' $/gal</b><br>Buy ' + p.gallons_to_buy + ' gal = ' + money(p.cost) +
+              '<br>Mile ' + p.mile_marker);
+            markers[n - 1] = m;
+            return m;
+          }
+          const color = k === 'start' ? '#16a34a' : '#dc2626';
+          return L.circleMarker(ll, {radius:9, color:'#fff', weight:2, fillColor:color, fillOpacity:1})
+                  .bindTooltip((k === 'start' ? 'Start: ' : 'Finish: ') + esc(f.properties.label));
+        }
+      }).addTo(layer);
+      map.fitBounds(geo.getBounds(), {padding:[30,30]});
+
+      const stops = d.fuel_stops.map((s, i) =>
+        '<div class="stop" data-i="' + i + '"><div class="top"><span><span class="num">' + (i + 1) + '</span>' + esc(s.name) +
+        '</span><span>' + money(s.cost) + '</span></div><div class="sub">' + esc(s.city) + ', ' + esc(s.state) +
+        ' · mile ' + s.mile_marker + '<br>' + s.gallons_to_buy + ' gal @ ' + s.price_per_gallon.toFixed(3) + ' $/gal</div></div>').join('');
+      panel.innerHTML = (d.warning ? '<div class="msg warn"><b>Incomplete plan.</b> ' + esc(d.warning) + '</div>' : '') +
+        '<div class="cards">' +
+        '<div class="card total"><b>' + money(d.total_fuel_cost) + '</b><span>total fuel cost</span></div>' +
+        '<div class="card"><b>' + d.gallons_used + '</b><span>gallons used</span></div>' +
+        '<div class="card"><b>' + d.distance_miles + ' mi</b><span>distance</span></div>' +
+        '<div class="card"><b>' + d.duration_hours + ' h</b><span>driving time</span></div></div>' +
+        '<h2>Fuel stops (' + d.fuel_stops.length + ')</h2>' +
+        (stops || '<div class="msg">No fuel stop needed: the trip is within one tank.</div>') +
+        '<div class="note">' + d.meta.assumptions.map(esc).join('<br><br>') +
+        '<br><br>Routing-service calls for this request: ' + d.meta.routing_service_calls + '.</div>';
+      panel.querySelectorAll('.stop').forEach(el => el.addEventListener('click', () => {
+        const m = markers[+el.dataset.i];
+        map.setView(m.getLatLng(), Math.max(map.getZoom(), 8)); m.openPopup();
+      }));
+    }
+  </script>
+</body>
+</html>
