@@ -33,7 +33,7 @@ python manage.py test routing
 
 ## Map page
 
-Open <http://127.0.0.1:8000/> for a small demo page: type a start and finish, and it draws the route and numbered fuel-stop pins on a Leaflet map, with the cost summary. It simply calls the API below. (Map tiles load from OpenStreetMap, so it needs internet.)
+Open <http://127.0.0.1:8000/> for a small demo page: type a start and finish, and it draws the route and numbered fuel-stop pins on a Leaflet map, with the cost summary. It simply calls the API below. (Map tiles load from Esri's free public street basemap, so it needs internet.)
 
 ## The endpoint
 
