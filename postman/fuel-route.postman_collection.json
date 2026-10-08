@@ -1,0 +1,463 @@
+{
+  "info": {
+    "name": "Fuel Route API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Start the server with `python manage.py runserver`, then run these requests."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Chicago to Dallas (place names)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": \"Dallas, TX\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Main demo: ~971 miles, 4 fuel stops. First call uses 3 routing-service calls."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Same trip again (cached)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": \"Dallas, TX\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run right after #1: meta.routing_service_calls is 0 and it returns in about 0.1 s."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Coordinates only (1 routing call)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": {\n    \"lat\": 41.8781,\n    \"lon\": -87.6298\n  },\n  \"finish\": \"32.7767,-96.7970\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Coordinates skip geocoding, so only 1 call to the routing service."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Los Angeles to New York (long, many stops)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Los Angeles, CA\",\n  \"finish\": \"New York, NY\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "~2,800 miles, about 15 fuel stops."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Short trip (no fuel stop needed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": \"Milwaukee, WI\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Within one tank: fuel_stops is empty and cost is 0 (the starting tank is not counted)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. GET with query string",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/route?start=Denver, CO&finish=Phoenix, AZ",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ],
+          "query": [
+            {
+              "key": "start",
+              "value": "Denver, CO"
+            },
+            {
+              "key": "finish",
+              "value": "Phoenix, AZ"
+            }
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json();",
+              "pm.test(\"has route, stops and cost\", () => { pm.expect(d.map.features[0].geometry.type).to.eql(\"LineString\"); pm.expect(d).to.have.property(\"total_fuel_cost\"); });",
+              "pm.test(\"max 3 routing-service calls\", () => pm.expect(d.meta.routing_service_calls).to.be.at.most(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Error: location outside the USA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": {\n    \"lat\": 51.5,\n    \"lon\": -0.12\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"clear error message\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Error: missing finish",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"clear error message\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Error: unknown place",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"asdkjhqwe zzxy\",\n  \"finish\": \"Dallas, TX\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"clear error message\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Error: no driving route (Hawaii to California)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/route",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "route"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Honolulu, HI\",\n  \"finish\": \"Los Angeles, CA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"clear error message\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
